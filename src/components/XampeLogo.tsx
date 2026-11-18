@@ -17,26 +17,29 @@ export const XampeLogo: React.FC<XampeLogoProps> = ({
         xmlns="http://w3.org"
         className="h-9 w-9 shrink-0"
       >
-        {/* Solid rounded orange square badge */}
-        <rect
-          x="4"
-          y="4"
-          width="56"
-          height="56"
-          rx="14"
-          fill="#EA580C"
-        />
-        {/* Crisp white geometric open shipping box + X */}
+        {/* Open top box flaps */}
         <path
-          d="M18 22L32 14L46 22V42L32 50L18 42V22Z"
-          stroke="#FFFFFF"
-          strokeWidth="4.5"
+          d="M14 20L8 12H26L32 20M50 20L56 12H38L32 20"
+          stroke="#EA580C"
+          strokeWidth="5"
+          strokeLinecap="round"
           strokeLinejoin="round"
         />
+        {/* Box body */}
+        <rect
+          x="14"
+          y="20"
+          width="36"
+          height="34"
+          rx="6"
+          stroke="#EA580C"
+          strokeWidth="5"
+        />
+        {/* Bold X mark inside the box */}
         <path
-          d="M24 26L40 38M40 26L24 38"
-          stroke="#FFFFFF"
-          strokeWidth="4.5"
+          d="M25 30L39 44M39 30L25 44"
+          stroke="#EA580C"
+          strokeWidth="5"
           strokeLinecap="round"
         />
       </svg>
