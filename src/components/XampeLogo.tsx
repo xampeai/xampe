@@ -17,27 +17,38 @@ export const XampeLogo: React.FC<XampeLogoProps> = ({
         xmlns="http://w3.org"
         className="h-9 w-9 shrink-0"
       >
-        {/* Open top box flaps */}
+        {/* Sharp 3D Isometric Cube Outline */}
         <path
-          d="M14 20L8 12H26L32 20M50 20L56 12H38L32 20"
+          d="M32 6L55 19V45L32 58L9 45V19L32 6Z"
+          stroke="#EA580C"
+          strokeWidth="5.5"
+          strokeLinejoin="round"
+        />
+        {/* 3D Cube Top & Center Ridge */}
+        <path
+          d="M9 19L32 32L55 19M32 32V58"
           stroke="#EA580C"
           strokeWidth="5"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        {/* Box body */}
-        <rect
-          x="14"
-          y="20"
-          width="36"
-          height="34"
-          rx="6"
+        {/* Top Lid Aura Spark / Crown Accent */}
+        <path
+          d="M26 17L32 13.5L38 17"
+          stroke="#EA580C"
+          strokeWidth="4.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {/* Confident Aura Eyes on Left & Right Cube Faces */}
+        <path
+          d="M17.5 34.5L24.5 38.5"
           stroke="#EA580C"
           strokeWidth="5"
+          strokeLinecap="round"
         />
-        {/* Bold X mark inside the box */}
         <path
-          d="M25 30L39 44M39 30L25 44"
+          d="M46.5 34.5L39.5 38.5"
           stroke="#EA580C"
           strokeWidth="5"
           strokeLinecap="round"
