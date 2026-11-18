@@ -10,12 +10,12 @@ export const XampeLogo: React.FC<XampeLogoProps> = ({
   showText = true,
 }) => {
   return (
-    <div className={`inline-flex items-center gap-2.5 select-none ${className}`}>
+    <div className={`inline-flex items-center gap-3 select-none ${className}`}>
       <svg
         viewBox="0 0 64 64"
         fill="none"
         xmlns="http://w3.org"
-        className="h-9 w-9 shrink-0"
+        className="h-12 w-12 shrink-0"
       >
         {/* Solid Orange Hexagon Cube */}
         <path
@@ -45,7 +45,7 @@ export const XampeLogo: React.FC<XampeLogoProps> = ({
         />
       </svg>
       {showText && (
-        <span className="text-xl font-extrabold tracking-tight text-slate-900">
+        <span className="text-2xl font-extrabold tracking-tight text-slate-900">
           Xampe
         </span>
       )}
