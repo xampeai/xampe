@@ -34,11 +34,16 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const tokenRes = await fetch('https://' + shop + '/admin/oauth/access_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        expiring: 1,
+      }),
     });
-    const tokenJson = (await tokenRes.json()) as { access_token?: string; scope?: string };
+    const tokenJson = (await tokenRes.json()) as { access_token?: string };
     if (!tokenRes.ok || !tokenJson.access_token) {
-      sendError('Could not obtain Shopify store access.');
+      sendError('Could not obtain expiring Shopify store access.');
       return;
     }
 
@@ -52,11 +57,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       } catch {}
     }
 
-    if (products.length === 0) {
-      sendError('Decoded 0 products from session state. State length: ' + rawState.length);
-      return;
-    }
-
     let injectedCount = 0;
     let lastError = '';
 
@@ -65,41 +65,70 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const bullets = Array.isArray(p.benefits)
         ? p.benefits.map((b) => '<li>' + String(b).replace(/[<>]/g, '') + '</li>').join('')
         : '';
-      const bodyHtml = bullets
+      const descriptionHtml = bullets
         ? '<p>' + desc + '</p><ul>' + bullets + '</ul>'
         : '<p>' + (desc || 'Curated everyday essential.') + '</p>';
 
       const hasImage = typeof p.imageUrl === 'string' && /^https?:\/\//i.test(p.imageUrl);
+      const media = hasImage
+        ? [{ originalSource: p.imageUrl, alt: String(p.name || 'Product'), mediaContentType: 'IMAGE' }]
+        : undefined;
 
-      const restRes = await fetch('https://' + shop + '/admin/api/2025-01/products.json', {
+      const gqlRes = await fetch('https://' + shop + '/admin/api/2025-01/graphql.json', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Shopify-Access-Token': tokenJson.access_token,
         },
         body: JSON.stringify({
-          product: {
-            title: String(p.name || 'Product'),
-            body_html: bodyHtml,
-            vendor: storeName,
-            product_type: String(p.category || 'Featured'),
-            status: 'active',
-            variants: [{ price: Number(p.retailPrice || 29.99).toFixed(2) }],
-            ...(hasImage ? { images: [{ src: p.imageUrl }] } : {}),
+          query:
+            'mutation productCreate($product: ProductCreateInput!, $media: [CreateMediaInput!]) { productCreate(product: $product, media: $media) { product { id variants(first: 1) { edges { node { id } } } } userErrors { field message } } }',
+          variables: {
+            product: {
+              title: String(p.name || 'Product'),
+              descriptionHtml,
+              vendor: storeName,
+              productType: String(p.category || 'Featured'),
+              status: 'ACTIVE',
+              tags: ['Xampe Curated', String(p.category || 'Featured')],
+            },
+            media,
           },
         }),
       });
 
-      if (restRes.ok) {
+      const gqlJson = (await gqlRes.json()) as Record<string, unknown>;
+      const prodCreate = (gqlJson?.data as Record<string, unknown>)?.productCreate as Record<string, unknown>;
+      const prodObj = prodCreate?.product as Record<string, unknown>;
+
+      if (prodObj?.id) {
         injectedCount += 1;
+        const edges = ((prodObj.variants as Record<string, unknown>)?.edges as Array<Record<string, unknown>>) || [];
+        const firstNode = (edges.find((e) => Boolean((e?.node as Record<string, unknown>)?.id))?.node as Record<string, unknown>) || {};
+        if (firstNode.id) {
+          await fetch('https://' + shop + '/admin/api/2025-01/graphql.json', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Shopify-Access-Token': tokenJson.access_token,
+            },
+            body: JSON.stringify({
+              query:
+                'mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) { productVariantsBulkUpdate(productId: $productId, variants: $variants) { productVariants { id } } }',
+              variables: {
+                productId: prodObj.id,
+                variants: [{ id: firstNode.id, price: Number(p.retailPrice || 29.99).toFixed(2) }],
+              },
+            }),
+          }).catch(() => {});
+        }
       } else {
-        const errText = await restRes.text();
-        lastError = 'HTTP ' + restRes.status + ' (scopes: ' + (tokenJson.scope || 'none') + '): ' + errText.slice(0, 180);
+        lastError = JSON.stringify(gqlJson).slice(0, 220);
       }
     }
 
     if (injectedCount === 0) {
-      sendError('Shopify rejected product upload -> ' + lastError);
+      sendError('Shopify GraphQL response -> ' + lastError);
       return;
     }
 
