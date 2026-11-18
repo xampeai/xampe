@@ -1,42 +1,59 @@
 import React from 'react';
 
 interface XampeLogoProps {
-  variant?: 'light' | 'dark';
-  size?: 'sm' | 'md';
+  className?: string;
+  showText?: boolean;
 }
 
 export const XampeLogo: React.FC<XampeLogoProps> = ({
-  variant = 'light',
-  size = 'md',
+  className = '',
+  showText = true,
 }) => {
-  const iconSizeClass = size === 'sm' ? 'h-7 w-7' : 'h-9 w-9';
-  const wordmarkClass =
-    size === 'sm'
-      ? variant === 'dark'
-        ? 'font-display text-[17px] font-extrabold tracking-tight text-white'
-        : 'font-display text-[17px] font-extrabold tracking-tight text-[#111827]'
-      : variant === 'dark'
-        ? 'font-display text-[21px] font-extrabold tracking-tight text-white'
-        : 'font-display text-[21px] font-extrabold tracking-tight text-[#111827]';
-
   return (
-    <span className="inline-flex items-center gap-2 whitespace-nowrap shrink-0">
-      {variant === 'dark' ? (
-        <span className="inline-flex items-center justify-center rounded-lg bg-white p-0.5 shrink-0">
-          <img
-            src="/assets/aistudio/image_6a0fb77_2ecd1718.jpg"
-            alt="Xampe logo"
-            className={`${iconSizeClass} object-cover object-center mix-blend-multiply rounded-md shrink-0`}
-          />
-        </span>
-      ) : (
-        <img
-          src="/assets/aistudio/image_6a0fb77_2ecd1718.jpg"
-          alt="Xampe logo"
-          className={`${iconSizeClass} object-cover object-center mix-blend-multiply shrink-0`}
+    <div className={`inline-flex items-center gap-2.5 select-none ${className}`}>
+      <svg
+        viewBox="0 0 64 64"
+        fill="none"
+        xmlns="http://w3.org"
+        className="h-9 w-9 shrink-0"
+      >
+        {/* Outer rounded hexagon box */}
+        <path
+          d="M32 6L54 18.7V45.3L32 58L10 45.3V18.7L32 6Z"
+          stroke="#EA580C"
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
         />
+        {/* Top Y-fold angry brow lines */}
+        <path
+          d="M11 19.5L32 31.5L53 19.5"
+          stroke="#EA580C"
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {/* Angry eyes */}
+        <path
+          d="M19.5 34.5L25.5 37.5"
+          stroke="#EA580C"
+          strokeWidth="5.5"
+          strokeLinecap="round"
+        />
+        <path
+          d="M44.5 34.5L38.5 37.5"
+          stroke="#EA580C"
+          strokeWidth="5.5"
+          strokeLinecap="round"
+        />
+      </svg>
+      {showText && (
+        <span className="text-xl font-extrabold tracking-tight text-slate-900">
+          Xampe
+        </span>
       )}
-      <span className={wordmarkClass}>Xampe</span>
-    </span>
+    </div>
   );
 };
+
+export default XampeLogo;
