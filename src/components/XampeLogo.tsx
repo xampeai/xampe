@@ -17,39 +17,29 @@ export const XampeLogo: React.FC<XampeLogoProps> = ({
         xmlns="http://w3.org"
         className="h-9 w-9 shrink-0"
       >
-        {/* Sharp 3D Isometric Cube Outline */}
+        {/* Solid Orange Hexagon Cube */}
         <path
           d="M32 6L55 19V45L32 58L9 45V19L32 6Z"
-          stroke="#EA580C"
-          strokeWidth="5.5"
-          strokeLinejoin="round"
+          fill="#EA580C"
         />
-        {/* 3D Cube Top & Center Ridge */}
+        {/* Crisp White Top Lid Fold */}
         <path
-          d="M9 19L32 32L55 19M32 32V58"
-          stroke="#EA580C"
-          strokeWidth="5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {/* Top Lid Aura Spark / Crown Accent */}
-        <path
-          d="M26 17L32 13.5L38 17"
-          stroke="#EA580C"
+          d="M11 20L32 32L53 20"
+          stroke="#FFFFFF"
           strokeWidth="4.5"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        {/* Confident Aura Eyes on Left & Right Cube Faces */}
+        {/* Sharp White Aura Eyes */}
         <path
-          d="M17.5 34.5L24.5 38.5"
-          stroke="#EA580C"
+          d="M18 33L26 37.5"
+          stroke="#FFFFFF"
           strokeWidth="5"
           strokeLinecap="round"
         />
         <path
-          d="M46.5 34.5L39.5 38.5"
-          stroke="#EA580C"
+          d="M46 33L38 37.5"
+          stroke="#FFFFFF"
           strokeWidth="5"
           strokeLinecap="round"
         />
