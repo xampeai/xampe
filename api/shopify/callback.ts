@@ -36,7 +36,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
     });
-    const tokenJson = (await tokenRes.json()) as { access_token?: string };
+    const tokenJson = (await tokenRes.json()) as { access_token?: string; scope?: string };
     if (!tokenRes.ok || !tokenJson.access_token) {
       sendError('Could not obtain Shopify store access.');
       return;
@@ -52,7 +52,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       } catch {}
     }
 
+    if (products.length === 0) {
+      sendError('Decoded 0 products from session state. State length: ' + rawState.length);
+      return;
+    }
+
     let injectedCount = 0;
+    let lastError = '';
 
     for (const p of products) {
       const desc = String(p.shortDescription || '').replace(/[<>]/g, '');
@@ -65,60 +71,36 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
       const hasImage = typeof p.imageUrl === 'string' && /^https?:\/\//i.test(p.imageUrl);
 
-      // 1. Try Shopify REST Products API (creates product, price, and image in one call)
-      const restPayload: Record<string, unknown> = {
-        product: {
-          title: String(p.name || 'Product'),
-          body_html: bodyHtml,
-          vendor: storeName,
-          product_type: String(p.category || 'Featured'),
-          status: 'active',
-          tags: 'Xampe Curated, ' + String(p.category || 'Featured'),
-          variants: [{ price: Number(p.retailPrice || 29.99).toFixed(2) }],
-          ...(hasImage ? { images: [{ src: p.imageUrl }] } : {}),
-        },
-      };
-
       const restRes = await fetch('https://' + shop + '/admin/api/2025-01/products.json', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Shopify-Access-Token': tokenJson.access_token,
         },
-        body: JSON.stringify(restPayload),
+        body: JSON.stringify({
+          product: {
+            title: String(p.name || 'Product'),
+            body_html: bodyHtml,
+            vendor: storeName,
+            product_type: String(p.category || 'Featured'),
+            status: 'active',
+            variants: [{ price: Number(p.retailPrice || 29.99).toFixed(2) }],
+            ...(hasImage ? { images: [{ src: p.imageUrl }] } : {}),
+          },
+        }),
       });
 
       if (restRes.ok) {
         injectedCount += 1;
-        continue;
+      } else {
+        const errText = await restRes.text();
+        lastError = 'HTTP ' + restRes.status + ' (scopes: ' + (tokenJson.scope || 'none') + '): ' + errText.slice(0, 180);
       }
+    }
 
-      // 2. Fallback to GraphQL productCreate if REST is restricted
-      const gqlRes = await fetch('https://' + shop + '/admin/api/2025-01/graphql.json', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Shopify-Access-Token': tokenJson.access_token,
-        },
-        body: JSON.stringify({
-          query:
-            'mutation productCreate($product: ProductCreateInput!) { productCreate(product: $product) { product { id } } }',
-          variables: {
-            product: {
-              title: String(p.name || 'Product'),
-              descriptionHtml: bodyHtml,
-              vendor: storeName,
-              productType: String(p.category || 'Featured'),
-              status: 'ACTIVE',
-            },
-          },
-        }),
-      });
-      const gqlJson = (await gqlRes.json()) as Record<string, unknown>;
-      const prodObj = ((gqlJson?.data as Record<string, unknown>)?.productCreate as Record<string, unknown>)?.product as Record<string, unknown>;
-      if (prodObj?.id) {
-        injectedCount += 1;
-      }
+    if (injectedCount === 0) {
+      sendError('Shopify rejected product upload -> ' + lastError);
+      return;
     }
 
     const payload = JSON.stringify({
@@ -145,7 +127,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         JSON.stringify(fallbackUrl) +
         ');}</script><p>Store pushed to Shopify!</p>'
     );
-  } catch {
-    sendError('Issue pushing products to Shopify.');
+  } catch (err) {
+    sendError('Callback exception: ' + (err instanceof Error ? err.message : String(err)));
   }
 }
