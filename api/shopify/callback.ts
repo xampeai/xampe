@@ -54,58 +54,62 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     let injectedCount = 0;
     for (const p of products) {
+      const desc = String(p.shortDescription || '').replace(/[<>]/g, '');
+      const bullets = Array.isArray(p.benefits)
+        ? p.benefits.map((b) => '<li>' + String(b).replace(/[<>]/g, '') + '</li>').join('')
+        : '';
+      const descriptionHtml = bullets
+        ? '<p>' + desc + '</p><ul>' + bullets + '</ul>'
+        : '<p>' + (desc || 'Curated everyday essential.') + '</p>';
+
+      const hasImage = typeof p.imageUrl === 'string' && /^https?:\/\//i.test(p.imageUrl);
+      const productInput: Record<string, unknown> = {
+        title: String(p.name || 'Product'),
+        descriptionHtml,
+        vendor: storeName,
+        productType: String(p.category || 'Featured'),
+        status: 'ACTIVE',
+        tags: ['Xampe Curated', String(p.category || 'Featured')],
+        productOptions: [{ name: 'Title', values: [{ name: 'Default Title' }] }],
+        variants: [
+          {
+            optionValues: [{ optionName: 'Title', name: 'Default Title' }],
+            price: Number(p.retailPrice || 29.99).toFixed(2),
+          },
+        ],
+      };
+
+      if (hasImage) {
+        productInput.files = [
+          {
+            originalSource: p.imageUrl,
+            alt: String(p.name || 'Product'),
+            contentType: 'IMAGE',
+          },
+        ];
+      }
+
       const gqlRes = await fetch('https://' + shop + '/admin/api/2025-01/graphql.json', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': tokenJson.access_token },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shopify-Access-Token': tokenJson.access_token,
+        },
         body: JSON.stringify({
           query:
-            'mutation productCreate($input: ProductCreateInput!) { productCreate(input: $input) { product { id variants(first: 1) { edges { node { id } } } } } }',
+            'mutation productSet($input: ProductSetInput!, $synchronous: Boolean!) { productSet(input: $input, synchronous: $synchronous) { product { id title } userErrors { field message } } }',
           variables: {
-            input: {
-              title: String(p.name || 'Product'),
-              descriptionHtml: '<p>' + String(p.shortDescription || '').replace(/[<>]/g, '') + '</p>',
-              vendor: storeName,
-              productType: String(p.category || 'Featured'),
-              status: 'ACTIVE',
-            },
+            input: productInput,
+            synchronous: true,
           },
         }),
       });
+
       const gqlJson = (await gqlRes.json()) as Record<string, unknown>;
-      const prod = (gqlJson?.data as Record<string, unknown>)?.productCreate as Record<string, unknown>;
-      const prodObj = prod?.product as Record<string, unknown>;
+      const prodSet = (gqlJson?.data as Record<string, unknown>)?.productSet as Record<string, unknown>;
+      const prodObj = prodSet?.product as Record<string, unknown>;
       if (prodObj?.id) {
         injectedCount += 1;
-        const edges = ((prodObj.variants as Record<string, unknown>)?.edges as Array<Record<string, unknown>>) || [];
-        const variantId = (edges.find((e) => Boolean((e?.node as Record<string, unknown>)?.id))?.node as Record<string, unknown>)?.id;
-        if (variantId) {
-          await fetch('https://' + shop + '/admin/api/2025-01/graphql.json', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': tokenJson.access_token },
-            body: JSON.stringify({
-              query:
-                'mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) { productVariantsBulkUpdate(productId: $productId, variants: $variants) { productVariants { id } } }',
-              variables: {
-                productId: prodObj.id,
-                variants: [{ id: variantId, price: Number(p.retailPrice || 29.99).toFixed(2) }],
-              },
-            }),
-          }).catch(() => {});
-        }
-        if (typeof p.imageUrl === 'string' && /^https?:\/\//i.test(p.imageUrl)) {
-          await fetch('https://' + shop + '/admin/api/2025-01/graphql.json', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': tokenJson.access_token },
-            body: JSON.stringify({
-              query:
-                'mutation productCreateMedia($productId: ID!, $media: [CreateMediaInput!]!) { productCreateMedia(productId: $productId, media: $media) { media { id } } }',
-              variables: {
-                productId: prodObj.id,
-                media: [{ originalSource: p.imageUrl, alt: String(p.name || 'Product'), mediaContentType: 'IMAGE' }],
-              },
-            }),
-          }).catch(() => {});
-        }
       }
     }
 
