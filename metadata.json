@@ -1,0 +1,6 @@
+{
+  "name": "Xampe — AI Shopify Store Builder & Winning Product Finder",
+  "description": "Build a ready-to-launch Shopify dropshipping store with winning products, conversion copy, and free e-commerce tools in 60 seconds.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
