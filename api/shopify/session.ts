@@ -1,151 +1,80 @@
+import crypto from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  const url = new URL(req.url || '/', 'https://xampe.com');
-  const shop = (url.searchParams.get('shop') || '').trim().toLowerCase();
-  const code = (url.searchParams.get('code') || '').trim();
-  const rawState = (url.searchParams.get('state') || '').trim();
-  const dotIdx = rawState.indexOf('.');
-  const encodedPayload = dotIdx !== -1 ? rawState.slice(dotIdx + 1) : '';
+  res.setHeader('Content-Type', 'application/json');
 
-  const clientId = (process.env.SHOPIFY_CLIENT_ID || '').trim();
-  const clientSecret = (process.env.SHOPIFY_CLIENT_SECRET || '').trim();
-
-  const sendError = (msg: string) => {
-    res.statusCode = 400;
-    res.setHeader('Content-Type', 'text/html');
-    res.end(
-      '<script>if(window.opener){window.opener.postMessage({type:"SHOPIFY_INJECT_ERROR",message:' +
-        JSON.stringify(msg) +
-        '},"*");window.close();}else{window.location.replace("/?shopify_error="+' +
-        JSON.stringify(encodeURIComponent(msg)) +
-        ');}</script><p>' +
-        msg +
-        '</p>'
-    );
-  };
-
-  if (!shop || !code || !clientId || !clientSecret) {
-    sendError('Could not complete Shopify authorization.');
+  if (req.method !== 'POST') {
+    res.statusCode = 405;
+    res.end(JSON.stringify({ ok: false, error: 'Method not allowed' }));
     return;
   }
 
-  try {
-    const tokenRes = await fetch('https://' + shop + '/admin/oauth/access_token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
-    });
-    const tokenJson = (await tokenRes.json()) as { access_token?: string };
-    if (!tokenRes.ok || !tokenJson.access_token) {
-      sendError('Could not obtain Shopify store access.');
-      return;
-    }
-
-    let storeName = 'Xampe Store';
-    let products: Array<Record<string, unknown>> = [];
-    if (encodedPayload) {
-      try {
-        const decoded = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8'));
-        storeName = decoded.storeName || 'Xampe Store';
-        products = Array.isArray(decoded.products) ? decoded.products : [];
-      } catch {}
-    }
-
-    let injectedCount = 0;
-
-    for (const p of products) {
-      const desc = String(p.shortDescription || '').replace(/[<>]/g, '');
-      const bullets = Array.isArray(p.benefits)
-        ? p.benefits.map((b) => '<li>' + String(b).replace(/[<>]/g, '') + '</li>').join('')
-        : '';
-      const bodyHtml = bullets
-        ? '<p>' + desc + '</p><ul>' + bullets + '</ul>'
-        : '<p>' + (desc || 'Curated everyday essential.') + '</p>';
-
-      const hasImage = typeof p.imageUrl === 'string' && /^https?:\/\//i.test(p.imageUrl);
-
-      // 1. Try Shopify REST Products API (creates product, price, and image in one call)
-      const restPayload: Record<string, unknown> = {
-        product: {
-          title: String(p.name || 'Product'),
-          body_html: bodyHtml,
-          vendor: storeName,
-          product_type: String(p.category || 'Featured'),
-          status: 'active',
-          tags: 'Xampe Curated, ' + String(p.category || 'Featured'),
-          variants: [{ price: Number(p.retailPrice || 29.99).toFixed(2) }],
-          ...(hasImage ? { images: [{ src: p.imageUrl }] } : {}),
-        },
-      };
-
-      const restRes = await fetch('https://' + shop + '/admin/api/2025-01/products.json', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Shopify-Access-Token': tokenJson.access_token,
-        },
-        body: JSON.stringify(restPayload),
-      });
-
-      if (restRes.ok) {
-        injectedCount += 1;
-        continue;
-      }
-
-      // 2. Fallback to GraphQL productCreate if REST is restricted
-      const gqlRes = await fetch('https://' + shop + '/admin/api/2025-01/graphql.json', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Shopify-Access-Token': tokenJson.access_token,
-        },
-        body: JSON.stringify({
-          query:
-            'mutation productCreate($product: ProductCreateInput!) { productCreate(product: $product) { product { id } } }',
-          variables: {
-            product: {
-              title: String(p.name || 'Product'),
-              descriptionHtml: bodyHtml,
-              vendor: storeName,
-              productType: String(p.category || 'Featured'),
-              status: 'ACTIVE',
-            },
-          },
-        }),
-      });
-      const gqlJson = (await gqlRes.json()) as Record<string, unknown>;
-      const prodObj = ((gqlJson?.data as Record<string, unknown>)?.productCreate as Record<string, unknown>)?.product as Record<string, unknown>;
-      if (prodObj?.id) {
-        injectedCount += 1;
-      }
-    }
-
-    const payload = JSON.stringify({
-      type: 'SHOPIFY_INJECT_SUCCESS',
-      shop,
-      storeName,
-      injectedCount,
-      adminProductsUrl: 'https://' + shop + '/admin/products',
-    });
-    const fallbackUrl =
-      '/?shopify_connected=true&shop=' +
-      encodeURIComponent(shop) +
-      '&count=' +
-      injectedCount +
-      '&store=' +
-      encodeURIComponent(storeName);
-
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'text/html');
-    res.end(
-      '<script>var p=' +
-        payload +
-        ';if(window.opener){window.opener.postMessage(p,"*");window.close();}else{window.location.replace(' +
-        JSON.stringify(fallbackUrl) +
-        ');}</script><p>Store pushed to Shopify!</p>'
-    );
-  } catch {
-    sendError('Issue pushing products to Shopify.');
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
+  let body: Record<string, unknown> = {};
+  try {
+    body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+  } catch {}
+
+  let clean = String(body.shop || '').trim().toLowerCase().replace(/^https?:\/\//, '');
+  const slash = clean.indexOf('/');
+  if (slash !== -1) clean = clean.slice(0, slash);
+  if (clean && !clean.includes('.')) clean = clean + '.myshopify.com';
+
+  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(clean)) {
+    res.statusCode = 400;
+    res.end(JSON.stringify({ ok: false, error: 'Enter a valid .myshopify.com store domain.' }));
+    return;
+  }
+
+  const products = Array.isArray(body.products) ? body.products : [];
+  if (products.length === 0) {
+    res.statusCode = 400;
+    res.end(JSON.stringify({ ok: false, error: 'No products found to push.' }));
+    return;
+  }
+
+  const clientId = (process.env.SHOPIFY_CLIENT_ID || '').trim();
+  const clientSecret = (process.env.SHOPIFY_CLIENT_SECRET || '').trim();
+  if (!clientId || !clientSecret) {
+    res.statusCode = 503;
+    res.end(JSON.stringify({ ok: false, error: 'Shopify keys missing on Vercel.' }));
+    return;
+  }
+
+  const baseUrl = (process.env.APP_URL || 'https://xampe.com').trim().replace(/\/+$/, '');
+  const compactPayload = Buffer.from(
+    JSON.stringify({
+      storeName: String(body.storeName || 'Xampe Store').trim(),
+      products: products.slice(0, 6).map((p: Record<string, unknown>) => ({
+        name: p.name,
+        shortDescription: p.shortDescription,
+        benefits: p.benefits,
+        category: p.category,
+        retailPrice: p.retailPrice,
+        imageUrl: p.imageUrl,
+      })),
+    })
+  ).toString('base64url');
+
+  const redirectUri = baseUrl + '/api/shopify/callback';
+  const params = new URLSearchParams({
+    client_id: clientId,
+    scope: 'write_products,read_products,write_themes,read_themes',
+    redirect_uri: redirectUri,
+    state: crypto.randomUUID() + '.' + compactPayload,
+  });
+
+  res.statusCode = 200;
+  res.end(
+    JSON.stringify({
+      ok: true,
+      shop: clean,
+      authUrl: 'https://' + clean + '/admin/oauth/authorize?' + params.toString(),
+      redirectUri,
+    })
+  );
 }
