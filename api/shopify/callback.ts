@@ -36,7 +36,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
     });
-    const tokenJson = (await tokenRes.json()) as { access_token?: string };
+    const tokenJson = (await tokenRes.json()) as { access_token?: string; scope?: string };
     if (!tokenRes.ok || !tokenJson.access_token) {
       sendError('Could not obtain Shopify store access.');
       return;
@@ -53,6 +53,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     let injectedCount = 0;
+    let lastDebug = '';
+
     for (const p of products) {
       const desc = String(p.shortDescription || '').replace(/[<>]/g, '');
       const bullets = Array.isArray(p.benefits)
@@ -63,31 +65,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         : '<p>' + (desc || 'Curated everyday essential.') + '</p>';
 
       const hasImage = typeof p.imageUrl === 'string' && /^https?:\/\//i.test(p.imageUrl);
-      const productInput: Record<string, unknown> = {
-        title: String(p.name || 'Product'),
-        descriptionHtml,
-        vendor: storeName,
-        productType: String(p.category || 'Featured'),
-        status: 'ACTIVE',
-        tags: ['Xampe Curated', String(p.category || 'Featured')],
-        productOptions: [{ name: 'Title', values: [{ name: 'Default Title' }] }],
-        variants: [
-          {
-            optionValues: [{ optionName: 'Title', name: 'Default Title' }],
-            price: Number(p.retailPrice || 29.99).toFixed(2),
-          },
-        ],
-      };
-
-      if (hasImage) {
-        productInput.files = [
-          {
-            originalSource: p.imageUrl,
-            alt: String(p.name || 'Product'),
-            contentType: 'IMAGE',
-          },
-        ];
-      }
+      const media = hasImage
+        ? [{ originalSource: p.imageUrl, alt: String(p.name || 'Product'), mediaContentType: 'IMAGE' }]
+        : undefined;
 
       const gqlRes = await fetch('https://' + shop + '/admin/api/2025-01/graphql.json', {
         method: 'POST',
@@ -97,19 +77,48 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         },
         body: JSON.stringify({
           query:
-            'mutation productSet($input: ProductSetInput!, $synchronous: Boolean!) { productSet(input: $input, synchronous: $synchronous) { product { id title } userErrors { field message } } }',
+            'mutation productCreate($product: ProductCreateInput!, $media: [CreateMediaInput!]) { productCreate(product: $product, media: $media) { product { id variants(first: 1) { edges { node { id } } } } userErrors { field message } } }',
           variables: {
-            input: productInput,
-            synchronous: true,
+            product: {
+              title: String(p.name || 'Product'),
+              descriptionHtml,
+              vendor: storeName,
+              productType: String(p.category || 'Featured'),
+              status: 'ACTIVE',
+              tags: ['Xampe Curated', String(p.category || 'Featured')],
+            },
+            media,
           },
         }),
       });
 
       const gqlJson = (await gqlRes.json()) as Record<string, unknown>;
-      const prodSet = (gqlJson?.data as Record<string, unknown>)?.productSet as Record<string, unknown>;
-      const prodObj = prodSet?.product as Record<string, unknown>;
+      const prodCreate = (gqlJson?.data as Record<string, unknown>)?.productCreate as Record<string, unknown>;
+      const prodObj = prodCreate?.product as Record<string, unknown>;
+
       if (prodObj?.id) {
         injectedCount += 1;
+        const edges = ((prodObj.variants as Record<string, unknown>)?.edges as Array<Record<string, unknown>>) || [];
+        const firstNode = (edges.find((e) => Boolean((e?.node as Record<string, unknown>)?.id))?.node as Record<string, unknown>) || {};
+        if (firstNode.id) {
+          await fetch('https://' + shop + '/admin/api/2025-01/graphql.json', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Shopify-Access-Token': tokenJson.access_token,
+            },
+            body: JSON.stringify({
+              query:
+                'mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) { productVariantsBulkUpdate(productId: $productId, variants: $variants) { productVariants { id } } }',
+              variables: {
+                productId: prodObj.id,
+                variants: [{ id: firstNode.id, price: Number(p.retailPrice || 29.99).toFixed(2) }],
+              },
+            }),
+          }).catch(() => {});
+        }
+      } else {
+        lastDebug = JSON.stringify(gqlJson).slice(0, 220);
       }
     }
 
@@ -126,7 +135,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       '&count=' +
       injectedCount +
       '&store=' +
-      encodeURIComponent(storeName);
+      encodeURIComponent(storeName) +
+      (injectedCount === 0 && lastDebug ? '&debug=' + encodeURIComponent(lastDebug) : '');
 
     res.statusCode = 200;
     res.setHeader('Content-Type', 'text/html');
