@@ -17,42 +17,30 @@ export const XampeLogo: React.FC<XampeLogoProps> = ({
         xmlns="http://w3.org"
         className="h-9 w-9 shrink-0"
       >
-        {/* Rounded Square Parcel Box */}
-        <rect
-          x="10"
-          y="16"
-          width="44"
-          height="40"
-          rx="11"
-          stroke="#EA580C"
-          strokeWidth="5.5"
-        />
-        {/* Open Top Box Flaps */}
+        {/* Solid Orange Hexagon Cube */}
         <path
-          d="M16 16L22 8H42L48 16"
-          stroke="#EA580C"
-          strokeWidth="5"
+          d="M32 6L55 19V45L32 58L9 45V19L32 6Z"
+          fill="#EA580C"
+        />
+        {/* Crisp White Top Lid Fold */}
+        <path
+          d="M11 20L32 32L53 20"
+          stroke="#FFFFFF"
+          strokeWidth="4.5"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        {/* Confident Slanted Aura Eyes */}
+        {/* Sharp White Aura Eyes */}
         <path
-          d="M20 33L27 36"
-          stroke="#EA580C"
-          strokeWidth="5.5"
+          d="M18 33L26 37.5"
+          stroke="#FFFFFF"
+          strokeWidth="5"
           strokeLinecap="round"
         />
         <path
-          d="M44 33L37 36"
-          stroke="#EA580C"
-          strokeWidth="5.5"
-          strokeLinecap="round"
-        />
-        {/* Subtle Confident Smirk */}
-        <path
-          d="M27 45C29.5 47 34.5 47 37 45"
-          stroke="#EA580C"
-          strokeWidth="4.5"
+          d="M46 33L38 37.5"
+          stroke="#FFFFFF"
+          strokeWidth="5"
           strokeLinecap="round"
         />
       </svg>
