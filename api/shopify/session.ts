@@ -45,10 +45,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
+  const storeName = String(body.storeName || 'Xampe Store').trim();
   const baseUrl = (process.env.APP_URL || 'https://xampe.com').trim().replace(/\/+$/, '');
   const compactPayload = Buffer.from(
     JSON.stringify({
-      storeName: String(body.storeName || 'Xampe Store').trim(),
+      storeName,
+      tagline: String(body.tagline || 'Engineered for everyday performance & reliability').trim(),
+      heroHeadline: String(body.heroHeadline || 'Welcome to ' + storeName).trim(),
+      heroSubheadline: String(
+        body.heroSubheadline || 'Discover our curated collection of high-converting everyday essentials.'
+      ).trim(),
+      accentColor: String(body.accentColor || '#111827').trim(),
       products: products.slice(0, 6).map((p: Record<string, unknown>) => ({
         name: p.name,
         shortDescription: p.shortDescription,
